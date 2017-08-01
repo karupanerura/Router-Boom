@@ -20,8 +20,8 @@ use re 'eval';
 use Router::Boom::Node;
 
 sub new {
-    my $class = shift;
-    my $self = bless { }, $class;
+    my ($class, %args) = @_;
+    my $self = bless \%args, $class;
     $self->{root} = Router::Boom::Node->new(key => '/');
     return $self;
 }
@@ -58,16 +58,17 @@ sub add {
                 Carp::croak("You can't include parens in your custom rule.");
             }
             push @capture, $name;
+            my $priority = $pattern ? 2 : 1;
             $pattern = $pattern ? "($pattern)" : "([^/]+)";
-            $p = $p->add_node($pattern);
+            $p = $p->add_node(key => $pattern, priority => $priority);
         } elsif (defined $2) {
             push @capture, $2;
-            $p = $p->add_node("([^/]+)");
+            $p = $p->add_node(key => "([^/]+)", priority => 1);
         } elsif (defined $3) {
             push @capture, '*';
-            $p = $p->add_node("(.+)");
+            $p = $p->add_node(key => "(.+)", priority => 0);
         } else {
-            $p = $p->add_node(quotemeta $4);
+            $p = $p->add_node(key => quotemeta $4, priority => 3);
         }
     }
     $p->leaf([\@capture, $stuff]);
@@ -82,7 +83,7 @@ sub _build_regexp {
     local @LEAVES;
     local $PAREN_CNT = 0;
     local @PARENS;
-    my $re = _to_regexp($trie);
+    my $re = _to_regexp($trie, { enable_priority_sort => $self->{enable_priority_sort} });
     $self->{leaves} = [@LEAVES];
     $self->{regexp} = qr{\A$re};
 }
@@ -115,7 +116,7 @@ sub regexp {
 }
 
 sub _to_regexp {
-    my ($node) = @_;
+    my ($node, $opts) = @_;
 
     my %leaves;
 
@@ -128,7 +129,9 @@ sub _to_regexp {
     }
     my @re;
     if (@{$node->children}>0) {
-        push @re, map { _to_regexp($_) } @{$node->children};
+        my @children = @{$node->children};
+        @children = sort { $b->priority <=> $a->priority } @children if $opts->{enable_priority_sort};
+        push @re, map { _to_regexp($_, $opts) } @children;
     }
     if ($node->leaf) {
         push @Router::Boom::LEAVES, $node->leaf;

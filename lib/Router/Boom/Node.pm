@@ -6,7 +6,7 @@ use 5.008_001;
 
 use Class::Accessor::Lite 0.05 (
     rw => [qw(leaf)],
-    ro => [qw(key children)],
+    ro => [qw(key children priority)],
 );
 
 sub new {
@@ -21,13 +21,14 @@ sub new {
 use re 'eval';
 
 sub add_node {
-    my ($self, $child) = @_;
+    my ($self, %args) = @_;
+    my $child = $args{key};
     for (my $i=0; $i<@{$self->{children}}; $i++) {
         if ($self->{children}->[$i]->{key} eq $child) {
             return $self->{children}->[$i];
         }
     }
-    push @{$self->{children}}, Router::Boom::Node->new(key => $child);
+    push @{$self->{children}}, Router::Boom::Node->new(%args);
     return $self->{children}->[-1];
 }
 
